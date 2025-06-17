@@ -15,33 +15,17 @@ local GuiService = game:GetService("GuiService")
 local Settings = {
     ESPEnabled = false,
     SpeedEnabled = false,
-    SpeedValue = 1000000000, -- Скорость по умолчанию
+    SpeedValue = 50, -- Скорость по умолчанию
     ThirdPersonEnabled = false,
     ThirdPersonDistance = 10, -- Расстояние камеры
     ThirdPersonAngle = 0, -- Угол наклона камеры
     FlyEnabled = false,
     FlySpeed = 50, -- Скорость полета
-    AntiAimEnabled = false,
-    AntiAimType = "Spin", -- Тип Anti-Aim: "Spin", "Static", "Jitter", "Random"
-    AntiAimSpeed = 1, -- Скорость вращения (Spin)
-    AntiAimAngle = 90, -- Угол смещения (Static)
-    AntiAimAmplitude = 30, -- Амплитуда (Jitter)
-    AntiAimFrequency = 0.1, -- Частота (Random)
-    AntiAimDirection = 1, -- Направление: 1 (по часовой), -1 (против)
-    AutoKillEnabled = false,
-    AutoKillDistance = 3, -- Расстояние телепортации
-    AutoKillMinHealth = 10, -- Минимальное здоровье противника
-    AimbotEnabled = false,
-    AimbotFOV = 100, -- Радиус FOV
-    AimbotSmoothness = 0.1, -- Чувствительность
-    AimbotHitPart = "Head", -- Часть тела
-    AimbotShowFOV = false, -- Показ FOV
-    TriggerbotEnabled = false,
-    TriggerbotDelay = 0.1, -- Задержка выстрелов
     HighJumpEnabled = false,
     JumpPower = 100, -- Высота прыжка
     ClumsyEnabled = false, -- Состояние Clumsy
     GUIEnabled = false, -- Состояние GUI
+    NoclipEnabled = false, -- Noclip
     ESPSettings = {
         NameSize = 8, -- Размер текста неймтага
         NameColor = Color3.fromRGB(255, 255, 255), -- Цвет текста
@@ -99,10 +83,10 @@ Button.MouseButton1Click:Connect(function()
     end
 end)
 
--- Создание круга FOV
+-- Создание круга FOV (оставлен для совместимости, но не используется)
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Visible = false
-FOVCircle.Radius = Settings.AimbotFOV
+FOVCircle.Radius = 100
 FOVCircle.Color = Color3.fromRGB(255, 255, 255)
 FOVCircle.Thickness = 1
 FOVCircle.Filled = false
@@ -287,181 +271,15 @@ local function UpdateFly()
     end
 end
 
--- Anti-Aim
-local AntiAimAngle = 0
-local LastAntiAimUpdate = 0
-local function UpdateAntiAim()
+-- Noclip
+local function UpdateNoclip()
     local character = LocalPlayer.Character
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-
-    if not character or not rootPart or not humanoid or not Settings.AntiAimEnabled then return end
-
-    local currentTime = tick()
-    if Settings.AntiAimType == "Spin" then
-        AntiAimAngle = AntiAimAngle + (Settings.AntiAimSpeed * Settings.AntiAimDirection)
-        if AntiAimAngle >= 360 then AntiAimAngle = AntiAimAngle - 360 end
-        rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, math.rad(AntiAimAngle), 0)
-    elseif Settings.AntiAimType == "Static" then
-        rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, math.rad(Settings.AntiAimAngle), 0)
-    elseif Settings.AntiAimType == "Jitter" then
-        AntiAimAngle = AntiAimAngle + (math.random(-Settings.AntiAimAmplitude, Settings.AntiAimAmplitude) * Settings.AntiAimDirection)
-        rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, math.rad(AntiAimAngle), 0)
-    elseif Settings.AntiAimType == "Random" and currentTime - LastAntiAimUpdate > Settings.AntiAimFrequency then
-        AntiAimAngle = math.random(0, 360)
-        rootPart.CFrame = CFrame.new(rootPart.Position) * CFrame.Angles(0, math.rad(AntiAimAngle), 0)
-        LastAntiAimUpdate = currentTime
-    end
-end
-
--- AutoKill
-local LastTeleportTime = 0
-local function UpdateAutoKill()
-    if not Settings.AutoKillEnabled then return end
-
-    local character = LocalPlayer.Character
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not character or not rootPart then
-        warn("AutoKill: LocalPlayer character or rootPart not found")
-        return
-    end
-
-    local currentTime = tick()
-    if currentTime - LastTeleportTime < 0.5 then return end
-
-    local closestPlayer, closestDistance = nil, math.huge
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and (not player.Team or player.Team ~= LocalPlayer.Team) then
-            local targetRoot = player.Character:FindFirstChild("HumanoidRootPart")
-            local targetHumanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            if targetRoot and targetHumanoid and targetHumanoid.Health >= Settings.AutoKillMinHealth then
-                local distance = (rootPart.Position - targetRoot.Position).Magnitude
-                if distance < closestDistance then
-                    closestPlayer = player
-                    closestDistance = distance
-                end
+    if character and Settings.NoclipEnabled then
+        for _, part in pairs(character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
             end
         end
-    end
-
-    if closestPlayer and closestPlayer.Character then
-        local targetRoot = closestPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if targetRoot then
-            local backPosition = targetRoot.Position - (targetRoot.CFrame.LookVector * Settings.AutoKillDistance)
-            local raycastParams = RaycastParams.new()
-            raycastParams.FilterDescendantsInstances = {character, closestPlayer.Character}
-            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-            local raycastResult = Workspace:Raycast(rootPart.Position, backPosition - rootPart.Position, raycastParams)
-            if not raycastResult then
-                rootPart.CFrame = CFrame.new(backPosition + Vector3.new(0, 1, 0), targetRoot.Position)
-                LastTeleportTime = currentTime
-                print("AutoKill: Teleported behind " .. closestPlayer.Name)
-            else
-                warn("AutoKill: Obstacle detected, teleport canceled")
-            end
-        else
-            warn("AutoKill: Target rootPart not found")
-        end
-    else
-        warn("AutoKill: No valid target found")
-    end
-end
-
--- Aimbot
-local function IsPlayerVisible(targetPart)
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    local raycastResult = Workspace:Raycast(Camera.CFrame.Position, (targetPart.Position - Camera.CFrame.Position).Unit * 1000, raycastParams)
-    return raycastResult and raycastResult.Instance:IsDescendantOf(targetPart.Parent)
-end
-
-local function GetClosestPlayerInFOV()
-    local closestPlayer, closestDistance = nil, math.huge
-    local mousePos = UserInputService:GetMouseLocation()
-
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and (not player.Team or player.Team ~= LocalPlayer.Team) then
-            local targetHumanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            local targetPart = player.Character:FindFirstChild(Settings.AimbotHitPart)
-            if targetHumanoid and targetPart and targetHumanoid.Health > 0 and IsPlayerVisible(targetPart) then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                if onScreen then
-                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                    if distance < Settings.AimbotFOV and distance < closestDistance then
-                        closestPlayer = player
-                        closestDistance = distance
-                    end
-                end
-            end
-        end
-    end
-
-    return closestPlayer
-end
-
-local function UpdateAimbot()
-    if not Settings.AimbotEnabled or not UserInputService:IsMouseButtonPressed(Enum.MouseButton.Left) then
-        return
-    end
-
-    local character = LocalPlayer.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-
-    local closestPlayer = GetClosestPlayerInFOV()
-    if closestPlayer and closestPlayer.Character then
-        local targetPart = closestPlayer.Character:FindFirstChild(Settings.AimbotHitPart)
-        if targetPart then
-            local currentCFrame = Camera.CFrame
-            local newCFrame = CFrame.new(currentCFrame.Position, targetPart.Position)
-            Camera.CFrame = currentCFrame:Lerp(newCFrame, 1 - Settings.AimbotSmoothness)
-            print("Aimbot: Targeting " .. closestPlayer.Name)
-        end
-    end
-end
-
--- Обновление FOV круга
-local function UpdateFOVCircle()
-    FOVCircle.Visible = Settings.AimbotShowFOV
-    FOVCircle.Radius = Settings.AimbotFOV
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-end
-
--- Triggerbot
-local LastTriggerTime = 0
-local function UpdateTriggerbot()
-    if not Settings.TriggerbotEnabled then return end
-
-    local character = LocalPlayer.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
-
-    local currentTime = tick()
-    if currentTime - LastTriggerTime < Settings.TriggerbotDelay then return end
-
-    local mousePos = UserInputService:GetMouseLocation()
-    local closestPlayer, closestDistance = nil, math.huge
-
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and (not player.Team or player.Team ~= LocalPlayer.Team) then
-            local targetHumanoid = player.Character:FindFirstChildOfClass("Humanoid")
-            local targetPart = player.Character:FindFirstChild(Settings.AimbotHitPart)
-            if targetHumanoid and targetPart and targetHumanoid.Health > 0 and IsPlayerVisible(targetPart) then
-                local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
-                if onScreen then
-                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                    if distance < 10 and distance < closestDistance then
-                        closestPlayer = player
-                        closestDistance = distance
-                    end
-                end
-            end
-        end
-    end
-
-    if closestPlayer and closestPlayer.Character then
-        mouse1click()
-        LastTriggerTime = currentTime
-        print("Triggerbot: Fired at " .. closestPlayer.Name)
     end
 end
 
@@ -509,6 +327,55 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
         ToggleGUI()
     end
 end)
+
+-- Добавленная функция с SessionID и телепортацией
+local Keybind = "F"
+local SessionID = string.gsub(tostring(math.random()):sub(3), "%d", function(c)
+    return string.char(96 + math.random(1, 26))
+end)
+print(' | Running BigPaintball2.lua made by Astro with keybind ' .. Keybind .. '! [SessionID ' .. SessionID .. ']')
+
+local Enabled = true -- Постоянно включено после запуска
+local function safeExecute(func)
+    local success, errorMessage = pcall(func)
+    if not success then
+        warn(' | Error occurred: ' .. errorMessage .. ' [SessionID ' .. SessionID .. ']')
+    end
+end
+
+local function teleportEntities(cframe, team)
+    local spawnPosition = cframe * CFrame.new(0, 0, -15)
+
+    for _, entity in ipairs(Workspace.__THINGS.__ENTITIES:GetChildren()) do
+        if entity:FindFirstChild("HumanoidRootPart") then
+            local humanoidRootPart = entity.HumanoidRootPart
+            humanoidRootPart.CanCollide = false
+            humanoidRootPart.Anchored = true
+            humanoidRootPart.CFrame = spawnPosition
+        elseif entity:FindFirstChild("Hitbox") then
+            local directory = entity:GetAttribute("Directory")
+            if not (directory == "White" and entity:GetAttribute("OwnerUID") == LocalPlayer.UserId) and
+               (not team or directory ~= team.Name) then
+                entity.Hitbox.CanCollide = false
+                entity.Hitbox.Anchored = true
+                entity.Hitbox.CFrame = spawnPosition * CFrame.new(math.random(-5, 5), 0, math.random(-5, 5))
+            end
+        end
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            if not team or team.Name ~= player.Team.Name then
+                if not player.Character:FindFirstChild("ForceField") then
+                    local humanoidRootPart = player.Character.HumanoidRootPart
+                    humanoidRootPart.CanCollide = false
+                    humanoidRootPart.Anchored = true
+                    humanoidRootPart.CFrame = spawnPosition * CFrame.new(math.random(-5, 5), 0, math.random(-5, 5))
+                end
+            end
+        end
+    end
+end
 
 -- Инициализация GUI после ввода пароля
 function InitializeGUI()
@@ -596,148 +463,15 @@ function InitializeGUI()
         UpdateFly()
     end)
 
-    -- Toggle для Anti-Aim
-    Section:NewToggle("Anti-Aim", "Enables anti-aim", function(state)
-        Settings.AntiAimEnabled = state
-        UpdateAntiAim()
+    -- Toggle для Noclip
+    Section:NewToggle("Noclip", "Walk through walls", function(state)
+        Settings.NoclipEnabled = state
+        UpdateNoclip()
     end)
 
-    -- Настройка Anti-Aim
-    local AntiAimSection = Tab:NewSection("Anti-Aim Settings")
-    AntiAimSection:NewDropdown("Anti-Aim Type", "Select anti-aim type", {"Spin", "Static", "Jitter", "Random"}, function(value)
-        Settings.AntiAimType = value
-        UpdateAntiAim()
-    end)
-    AntiAimSection:NewSlider("Spin Speed", "Set spin speed", 10, 1, function(value)
-        Settings.AntiAimSpeed = value
-        UpdateAntiAim()
-    end)
-    AntiAimSection:NewSlider("Static Angle", "Set static angle", 360, 0, function(value)
-        Settings.AntiAimAngle = value
-        UpdateAntiAim()
-    end)
-    AntiAimSection:NewSlider("Jitter Amplitude", "Set jitter amplitude", 90, 10, function(value)
-        Settings.AntiAimAmplitude = value
-        UpdateAntiAim()
-    end)
-    AntiAimSection:NewSlider("Random Frequency", "Set random update frequency", 100, 1, function(value)
-        Settings.AntiAimFrequency = value / 100
-        UpdateAntiAim()
-    end)
-    AntiAimSection:NewDropdown("Direction", "Select rotation direction", {"Clockwise", "Counter-Clockwise"}, function(value)
-        Settings.AntiAimDirection = value == "Clockwise" and 1 or -1
-        UpdateAntiAim()
-    end)
-
-    -- Toggle для AutoKill
-    Section:NewToggle("AutoKill", "Teleports behind closest enemy", function(state)
-        Settings.AutoKillEnabled = state
-        UpdateAutoKill()
-    end)
-    local AutoKillSection = Tab:NewSection("AutoKill Settings")
-    AutoKillSection:NewSlider("Teleport Distance", "Set teleport distance", 10, 1, function(value)
-        Settings.AutoKillDistance = value
-        UpdateAutoKill()
-    end)
-    AutoKillSection:NewSlider("Min Enemy Health", "Set minimum enemy health", 100, 0, function(value)
-        Settings.AutoKillMinHealth = value
-        UpdateAutoKill()
-    end)
-
-    -- Toggle для Aimbot
-    Section:NewToggle("Aimbot", "Enables aimbot with team and visible check", function(state)
-        Settings.AimbotEnabled = state
-        UpdateAimbot()
-    end)
-    local AimbotSection = Tab:NewSection("Aimbot Settings")
-    AimbotSection:NewToggle("Show FOV", "Show aimbot FOV circle", function(state)
-        Settings.AimbotShowFOV = state
-        UpdateFOVCircle()
-    end)
-    AimbotSection:NewSlider("FOV", "Set aimbot field of view", 500, 50, function(value)
-        Settings.AimbotFOV = value
-        UpdateFOVCircle()
-        UpdateAimbot()
-    end)
-    AimbotSection:NewSlider("Smoothness", "Set aimbot smoothness (0-100)", 100, 0, function(value)
-        Settings.AntiAimDirection = value == "Clockwise" and 1 or -1
-        UpdateAntiAim()
-    end)
-    AntiAimSection:NewSlider("Spin Speed", "Set spin speed", 10, 1, function(value)
-        Settings.AntiAimSpeed = value
-        UpdateAntiAim()
-    end)
-    AntiAimSection:NewSlider("Static Angle", "Set static angle", 360, 0, function(value)
-        Settings.AntiAimAngle = value
-        UpdateAntiAim()
-    end)
-    AntiAimSection:NewSlider("Jitter Amplitude", "Set jitter amplitude", 90, 10, function(value)
-        Settings.AntiAimAmplitude = value
-        UpdateAntiAim()
-    end)
-    AntiAimSection:NewSlider("Random Frequency", "Set random update frequency", 100, 1, function(value)
-        Settings.AntiAimFrequency = value / 100
-        UpdateAntiAim()
-    end)
-    AntiAimSection:NewDropdown("Direction", "Select rotation direction", {"Clockwise", "Counter-Clockwise"}, function(value)
-        Settings.AntiAimDirection = value == "Clockwise" and 1 or -1
-        UpdateAntiAim()
-    end)
-
-    -- Toggle для AutoKill
-    Section:NewToggle("AutoKill", "Teleports behind closest enemy", function(state)
-        Settings.AutoKillEnabled = state
-        UpdateAutoKill()
-    end)
-
-    -- Настройка AutoKill
-    local AutoKillSection = Tab:NewSection("AutoKill Settings")
-    AutoKillSection:NewSlider("Teleport Distance", "Set teleport distance", 10, 1, function(value)
-        Settings.AutoKillDistance = value
-        UpdateAutoKill()
-    end)
-    AutoKillSection:NewSlider("Min Enemy Health", "Set minimum enemy health", 100, 0, function(value)
-        Settings.AutoKillMinHealth = value
-        UpdateAutoKill()
-    end)
-
-    -- Toggle для Aimbot
-    Section:NewToggle("Aimbot", "Enables aimbot with team and visible check", function(state)
-        Settings.AimbotEnabled = state
-        UpdateAimbot()
-    end)
-
-    -- Настройка Aimbot
-    local AimbotSection = Tab:NewSection("Aimbot Settings")
-    AimbotSection:NewToggle("Show FOV", "Show aimbot FOV circle", function(state)
-        Settings.AimbotShowFOV = state
-        UpdateFOVCircle()
-    end)
-    AimbotSection:NewSlider("FOV", "Set aimbot field of view", 500, 50, function(value)
-        Settings.AimbotFOV = value
-        UpdateFOVCircle()
-        UpdateAimbot()
-    end)
-    AimbotSection:NewSlider("Smoothness", "Set aimbot smoothness (0-100)", 100, 0, function(value)
-        Settings.AimbotSmoothness = value / 100
-        UpdateAimbot()
-    end)
-    AimbotSection:NewDropdown("Hit Part", "Select target part", {"Head", "HumanoidRootPart"}, function(value)
-        Settings.AimbotHitPart = value
-        UpdateAimbot()
-    end)
-
-    -- Toggle для Triggerbot
-    Section:NewToggle("Triggerbot", "Auto-shoot when aiming at enemy", function(state)
-        Settings.TriggerbotEnabled = state
-        UpdateTriggerbot()
-    end)
-
-    -- Настройка Triggerbot
-    local TriggerbotSection = Tab:NewSection("Triggerbot Settings")
-    TriggerbotSection:NewSlider("Shot Delay", "Set delay between shots (0-1)", 100, 0, function(value)
-        Settings.TriggerbotDelay = value / 100
-        UpdateTriggerbot()
+    -- Toggle для Clumsy
+    Section:NewToggle("Clumsy", "Toggle lag effect", function(state)
+        ToggleClumsy(state)
     end)
 end
 
@@ -749,11 +483,16 @@ RunService.RenderStepped:Connect(function()
     UpdateHighJump()
     UpdateThirdPerson()
     UpdateFly()
-    UpdateAntiAim()
-    UpdateAutoKill()
-    UpdateAimbot()
-    UpdateFOVCircle()
-    UpdateTriggerbot()
+    UpdateNoclip()
+
+    -- Выполнение функции телепортации
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        safeExecute(function()
+            local cframe = LocalPlayer.Character.HumanoidRootPart.CFrame
+            local team = LocalPlayer.Team
+            teleportEntities(cframe, team)
+        end)
+    end
 end)
 
 -- Обновление при добавлении/удалении игроков
